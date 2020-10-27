@@ -59,6 +59,7 @@ public class TransportContext {
   private static final Logger logger = LoggerFactory.getLogger(TransportContext.class);
 
   private final TransportConf conf;
+  //对客户端请求消息进行处理的类，只用于TransportServer
   private final RpcHandler rpcHandler;
   private final boolean closeIdleConnections;
 

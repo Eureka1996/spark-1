@@ -72,15 +72,20 @@ import org.apache.spark.util._
 class SparkContext(config: SparkConf) extends Logging {
 
   // The call site where this SparkContext was constructed.
+  // 获取当前SparkContext的当前调用栈。包含了最靠近栈顶的用户类及最靠近栈底的Scala或者Spark核心类信息
   private val creationSite: CallSite = Utils.getCallSite()
 
   // If true, log warnings instead of throwing exceptions when multiple SparkContexts are active
+  // SparkContext默认只有一个实例。如果在config（SparkConf）中设置了allowMultipleContexts为true，
+  // 当存在多个active级别的SparkContext实例时Spark会发生警告，而不是抛出异常，要特别注意。
+  // 如果没有配置，则默认为false
   private val allowMultipleContexts: Boolean =
     config.getBoolean("spark.driver.allowMultipleContexts", false)
 
   // In order to prevent multiple SparkContexts from being active at the same time, mark this
   // context as having started construction.
   // NOTE: this must be placed at the beginning of the SparkContext constructor.
+  // 用来确保SparkContext实例的唯一性，并将当前的SparkContext标记为正在构建中，以防止多个SparkContext实例同时成为active级别的。
   SparkContext.markPartiallyConstructed(this, allowMultipleContexts)
 
   val startTime = System.currentTimeMillis()

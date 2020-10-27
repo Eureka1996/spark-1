@@ -42,8 +42,10 @@ public class TransportConf {
   private final String SPARK_NETWORK_IO_LAZYFD_KEY;
   private final String SPARK_NETWORK_VERBOSE_METRICS;
 
+  //配置提供者，ConfigProvider是个抽象类
   private final ConfigProvider conf;
 
+  //模块名称
   private final String module;
 
   public TransportConf(String module, ConfigProvider conf) {
