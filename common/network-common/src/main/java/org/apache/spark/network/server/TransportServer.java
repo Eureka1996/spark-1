@@ -85,15 +85,15 @@ public class TransportServer implements Closeable {
   }
 
   private void init(String hostToBind, int portToBind) {
-
+    //Netty服务端需同时创建bossGroup和workerGroup
     IOMode ioMode = IOMode.valueOf(conf.ioMode());
     EventLoopGroup bossGroup =
       NettyUtils.createEventLoop(ioMode, conf.serverThreads(), conf.getModuleName() + "-server");
     EventLoopGroup workerGroup = bossGroup;
-
+    //创建一个汇集ByteBuf但对本地线程缓存禁用的分配器
     PooledByteBufAllocator allocator = NettyUtils.createPooledByteBufAllocator(
       conf.preferDirectBufs(), true /* allowCache */, conf.serverThreads());
-
+    //创建Netty的服务端根引导程序并对其进行配置
     bootstrap = new ServerBootstrap()
       .group(bossGroup, workerGroup)
       .channel(NettyUtils.getServerChannelClass(ioMode))
@@ -114,7 +114,7 @@ public class TransportServer implements Closeable {
     if (conf.sendBuf() > 0) {
       bootstrap.childOption(ChannelOption.SO_SNDBUF, conf.sendBuf());
     }
-
+    //为根引导程序设置管道初始化回调函数
     bootstrap.childHandler(new ChannelInitializer<SocketChannel>() {
       @Override
       protected void initChannel(SocketChannel ch) {
@@ -126,6 +126,7 @@ public class TransportServer implements Closeable {
       }
     });
 
+    //给根引导程序绑定socket的监听端口
     InetSocketAddress address = hostToBind == null ?
         new InetSocketAddress(portToBind): new InetSocketAddress(hostToBind, portToBind);
     channelFuture = bootstrap.bind(address);

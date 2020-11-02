@@ -88,8 +88,10 @@ class SparkContext(config: SparkConf) extends Logging {
   // 用来确保SparkContext实例的唯一性，并将当前的SparkContext标记为正在构建中，以防止多个SparkContext实例同时成为active级别的。
   SparkContext.markPartiallyConstructed(this, allowMultipleContexts)
 
+  //sparkContext启动的时间戳
   val startTime = System.currentTimeMillis()
 
+  //标记sparkContext是否已经停止的状态
   private[spark] val stopped: AtomicBoolean = new AtomicBoolean(false)
 
   private[spark] def assertNotStopped(): Unit = {
@@ -197,6 +199,8 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _eventLogDir: Option[URI] = None
   private var _eventLogCodec: Option[String] = None
   private var _listenerBus: LiveListenerBus = _
+  //在Spark中，凡是需要执行任务的地方就需要SparkEnv。在生产环境中，SparkEnv往往运行于不同节点的Executor中。
+  // 但是由于Local模式在本地执行的需要，因此在Driver本地的Executor也需要SparkEnv
   private var _env: SparkEnv = _
   private var _statusTracker: SparkStatusTracker = _
   private var _progressBar: Option[ConsoleProgressBar] = None

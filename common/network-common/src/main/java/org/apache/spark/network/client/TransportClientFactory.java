@@ -76,14 +76,19 @@ public class TransportClientFactory implements Closeable {
   private final TransportContext context;
   private final TransportConf conf;
   private final List<TransportClientBootstrap> clientBootstraps;
+  //针对每个socket地址的连接池ClientPool的缓存。
   private final ConcurrentHashMap<SocketAddress, ClientPool> connectionPool;
 
   /** Random number generator for picking connections between peers. */
+  //对Socket地址对应的连接池ClientPool中缓存的TransportClient进行随机选择，对每个连接做负载均衡
   private final Random rand;
   private final int numConnectionsPerPeer;
 
+  //客户端Channel被创建时使用的类，通过ioMode来匹配，默认为NioSocketChannel，Spark还支持EpollEventLoopGroup
   private final Class<? extends Channel> socketChannelClass;
+  //根据Netty的规范，客户端只有worker组
   private EventLoopGroup workerGroup;
+
   private PooledByteBufAllocator pooledAllocator;
   private final NettyMemoryMetrics metrics;
 

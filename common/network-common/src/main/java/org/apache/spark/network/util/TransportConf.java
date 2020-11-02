@@ -24,6 +24,7 @@ import com.google.common.primitives.Ints;
 
 /**
  * A central location that tracks all the settings we expose to users.
+ * spark通常使用SparkTransportConf创建TransportConf
  */
 public class TransportConf {
 

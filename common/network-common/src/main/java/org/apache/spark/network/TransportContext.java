@@ -170,6 +170,8 @@ public class TransportContext {
     TransportClient client = new TransportClient(channel, responseHandler);
     TransportRequestHandler requestHandler = new TransportRequestHandler(channel, client,
       rpcHandler, conf.maxChunksBeingTransferred());
+    //TransportChannelHandler在服务端将代理TransportRequestHandler对请求消息进行处理，
+    // 并在客户端代理TransportResponseHandler对响应消息进行处理
     return new TransportChannelHandler(client, responseHandler, requestHandler,
       conf.connectionTimeoutMs(), closeIdleConnections);
   }
