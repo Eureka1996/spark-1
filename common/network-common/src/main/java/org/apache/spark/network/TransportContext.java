@@ -57,9 +57,9 @@ import org.apache.spark.network.util.TransportFrameDecoder;
  */
 public class TransportContext {
   private static final Logger logger = LoggerFactory.getLogger(TransportContext.class);
-
+  //上下文的配置信息，创建TransportClientFactory和TransportServer时都是必需的
   private final TransportConf conf;
-  //对客户端请求消息进行处理的类，只用于TransportServer
+  //对客户端请求消息进行处理的类，只用于创建TransportServer
   private final RpcHandler rpcHandler;
   private final boolean closeIdleConnections;
 
