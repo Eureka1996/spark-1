@@ -54,6 +54,7 @@ function main() {
     stty icanon echo > /dev/null 2>&1
   else
     export SPARK_SUBMIT_OPTS
+    # 执行spark-submit脚本
     "${SPARK_HOME}"/bin/spark-submit --class org.apache.spark.repl.Main --name "Spark shell" "$@"
   fi
 }

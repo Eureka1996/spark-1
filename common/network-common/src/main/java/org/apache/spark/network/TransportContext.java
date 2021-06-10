@@ -59,7 +59,7 @@ public class TransportContext {
   private static final Logger logger = LoggerFactory.getLogger(TransportContext.class);
   //上下文的配置信息，创建TransportClientFactory和TransportServer时都是必需的
   private final TransportConf conf;
-  //对客户端请求消息进行处理的类，只用于创建TransportServer
+  //对客户端的sendRPC方法发送的消息进行处理的类，只用于创建TransportServer
   private final RpcHandler rpcHandler;
   private final boolean closeIdleConnections;
 
@@ -75,7 +75,9 @@ public class TransportContext {
    * RPC to load it and cause to load the non-exist matcher class again. JVM will report
    * `ClassCircularityError` to prevent such infinite recursion. (See SPARK-17714)
    */
+  //在将消息放入管道前，先对消息内容进行编码，防止管道另一端读取时丢包和解析错误
   private static final MessageEncoder ENCODER = MessageEncoder.INSTANCE;
+  //对从管道中读取的ByteBuf进行解析，防止丢包和解析错误。
   private static final MessageDecoder DECODER = MessageDecoder.INSTANCE;
 
   public TransportContext(TransportConf conf, RpcHandler rpcHandler) {
@@ -95,6 +97,7 @@ public class TransportContext {
    * Initializes a ClientFactory which runs the given TransportClientBootstraps prior to returning
    * a new Client. Bootstraps will be executed synchronously, and must run successfully in order
    * to create a Client.
+   * bootstraps：客户端引导程序
    */
   public TransportClientFactory createClientFactory(List<TransportClientBootstrap> bootstraps) {
     return new TransportClientFactory(this, bootstraps);
@@ -147,6 +150,7 @@ public class TransportContext {
       TransportChannelHandler channelHandler = createChannelHandler(channel, channelRpcHandler);
       channel.pipeline()
         .addLast("encoder", ENCODER)
+        //TransportFrameDecoder对从管道中读取的ByteBuf按照数据帧进行解析
         .addLast(TransportFrameDecoder.HANDLER_NAME, NettyUtils.createFrameDecoder())
         .addLast("decoder", DECODER)
         .addLast("idleStateHandler", new IdleStateHandler(0, 0, conf.connectionTimeoutMs() / 1000))

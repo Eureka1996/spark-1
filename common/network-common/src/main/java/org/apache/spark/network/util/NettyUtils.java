@@ -35,6 +35,7 @@ import io.netty.util.internal.PlatformDependent;
 
 /**
  * Utilities for creating various Netty constructs based on whether we're using EPOLL or NIO.
+ * Spark将对Netty框架的使用细节都封装在NettyUtils工具类中。
  */
 public class NettyUtils {
   /** Creates a new ThreadFactory which prefixes each thread with the given name. */

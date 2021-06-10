@@ -226,11 +226,13 @@ private[spark] class ExecutorAllocationManager(
    * the scheduling task.
    */
   def start(): Unit = {
+    //向事件总线添加ExecutorAllocationListener
     listenerBus.addToManagementQueue(listener)
 
     val scheduleTask = new Runnable() {
       override def run(): Unit = {
         try {
+          //调整待执行Executor请求的数量和运行的Executor的数量
           schedule()
         } catch {
           case ct: ControlThrowable =>
@@ -240,6 +242,7 @@ private[spark] class ExecutorAllocationManager(
         }
       }
     }
+    //executor是只有一个线程的ScheduledThreadPoolExecutor，以固定的间隔intervalMillis进行调度
     executor.scheduleWithFixedDelay(scheduleTask, 0, intervalMillis, TimeUnit.MILLISECONDS)
 
     client.requestTotalExecutors(numExecutorsTarget, localityAwareTasks, hostToLocalTaskCount)
@@ -302,6 +305,7 @@ private[spark] class ExecutorAllocationManager(
       !expired
     }
     // Update executor target number only after initializing flag is unset
+    //重新计算所需的Executor数量，并更新请求的Executor数量
     updateAndSyncNumExecutorsTarget(now)
     if (executorIdsToBeRemoved.nonEmpty) {
       removeExecutors(executorIdsToBeRemoved)
@@ -323,11 +327,11 @@ private[spark] class ExecutorAllocationManager(
   private def updateAndSyncNumExecutorsTarget(now: Long): Int = synchronized {
     val maxNeeded = maxNumExecutorsNeeded
 
-    if (initializing) {
+    if (initializing) { //ExecutorAllocationManager还在初始化，则返回0
       // Do not change our target while we are still initializing,
       // Otherwise the first job may have to ramp up unnecessarily
       0
-    } else if (maxNeeded < numExecutorsTarget) {
+    } else if (maxNeeded < numExecutorsTarget) { //减少需要的Executor的数量
       // The target number exceeds the number we actually need, so stop adding new
       // executors and inform the cluster manager to cancel the extra pending requests
       val oldNumExecutorsTarget = numExecutorsTarget
@@ -346,7 +350,7 @@ private[spark] class ExecutorAllocationManager(
           s"$oldNumExecutorsTarget) because not all requested executors are actually needed")
       }
       numExecutorsTarget - oldNumExecutorsTarget
-    } else if (addTime != NOT_SET && now >= addTime) {
+    } else if (addTime != NOT_SET && now >= addTime) { //添加Executor
       val delta = addExecutors(maxNeeded)
       logDebug(s"Starting timer to add more executors (to " +
         s"expire in $sustainedSchedulerBacklogTimeoutS seconds)")

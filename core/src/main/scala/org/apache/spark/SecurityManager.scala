@@ -237,6 +237,7 @@ private[spark] class SecurityManager(
   // This is needed by the HTTP client fetching from the HttpServer. Put here so its
   // only set once.
   if (authOn) {
+    //设置默认的口令认证实例Authenticator，它的getPasswordAUthentication方法用于获取用户名、密码
     Authenticator.setDefault(
       new Authenticator() {
         override def getPasswordAuthentication(): PasswordAuthentication = {

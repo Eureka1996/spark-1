@@ -54,6 +54,7 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
   import SparkConf._
 
   /** Create a SparkConf that loads defaults from system properties and the classpath */
+  //无参构造，需要从系统属性中加载Spark配置
   def this() = this(true)
 
   //用于存储属性，线程安全的
@@ -67,7 +68,8 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
     _reader
   }
 
-
+  //loadDefaults为true时，将会从系统属性中加载Spark配置。
+  //loadDefaults通过主构造器传入
   if (loadDefaults) {
     //从系统属性中加载spark配置
     loadFromSystemProperties(false)
@@ -75,6 +77,7 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
 
   private[spark] def loadFromSystemProperties(silent: Boolean): SparkConf = {
     // Load any spark.* system properties
+    //加载以spark.开头的系统属性
     for ((key, value) <- Utils.getSystemProperties if key.startsWith("spark.")) {
       set(key, value, silent)
     }
@@ -83,6 +86,7 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
 
   /** Set a configuration variable.
    *  常用的设置属性的方法
+   *  silent的含义是什么？
    * */
   def set(key: String, value: String): SparkConf = {
     set(key, value, false)
@@ -440,7 +444,7 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
 
   /** Copy this object */
   override def clone: SparkConf = {
-    //不加载spark.开头的配置
+    //不加载spark.开头的配置。因为此类型的配置已经加载了
     val cloned = new SparkConf(false)
     settings.entrySet().asScala.foreach { e =>
       cloned.set(e.getKey(), e.getValue(), true)

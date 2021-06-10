@@ -43,7 +43,7 @@ object SparkTransportConf {
   /**
    * Utility for creating a [[TransportConf]] from a [[SparkConf]].
    * @param _conf the [[SparkConf]]
-   * @param module the module name
+   * @param module the module name，Spark的很多组件都利用RPC框架构建，它们之间按照模块名区分。
    * @param numUsableCores if nonzero, this will restrict the server and client threads to only
    *                       use the given number of cores, rather than all of the machine's cores.
    *                       This restriction will only occur if these properties are not already set.

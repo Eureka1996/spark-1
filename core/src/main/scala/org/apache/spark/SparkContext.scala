@@ -95,7 +95,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] val stopped: AtomicBoolean = new AtomicBoolean(false)
 
   private[spark] def assertNotStopped(): Unit = {
-    if (stopped.get()) {
+    if (stopped.get()fd) {
       val activeContext = SparkContext.activeContext.get()
       val activeCreationSite =
         if (activeContext == null) {
@@ -214,7 +214,9 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _applicationId: String = _
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None
+  //Executor动态分配管理器。可以根据工作负载动态调整Executor的数量。
   private var _executorAllocationManager: Option[ExecutorAllocationManager] = None
+  //用于清理那些超出应用范围的RDD、Shuffle对应的map任务状态、Shuffle元数据、Broadcast对象及RDD的Checkpoint数据。
   private var _cleaner: Option[ContextCleaner] = None
   private var _listenerBusStarted: Boolean = false
   private var _jars: Seq[String] = _
@@ -463,6 +465,7 @@ class SparkContext(config: SparkConf) extends Logging {
 
     // Add each JAR given through the constructor
     if (jars != null) {
+      //将Jar文件添加到Driver的RPC环境中。
       jars.foreach(addJar)
     }
 
@@ -550,6 +553,7 @@ class SparkContext(config: SparkConf) extends Logging {
       } else {
         None
       }
+    //启动ExecutorAllocationManager
     _executorAllocationManager.foreach(_.start())
 
     _cleaner =
@@ -562,11 +566,12 @@ class SparkContext(config: SparkConf) extends Logging {
 
     setupAndStartListenerBus()
     postEnvironmentUpdate()
+    //向事件总线投递SparkListenerApplicationStart事件
     postApplicationStart()
 
     // Post init
-    _taskScheduler.postStartHook()
-    _env.metricsSystem.registerSource(_dagScheduler.metricsSource)
+    _taskScheduler.postStartHook() //等待SchedulerBackend准备完成
+    _env.metricsSystem.registerSource(_dagScheduler.metricsSource)//向度量系统注册source
     _env.metricsSystem.registerSource(new BlockManagerSource(_env.blockManager))
     _executorAllocationManager.foreach { e =>
       _env.metricsSystem.registerSource(e.executorAllocationManagerSource)
@@ -2404,8 +2409,11 @@ class SparkContext(config: SparkConf) extends Logging {
       val schedulingMode = getSchedulingMode.toString
       val addedJarPaths = addedJars.keys.toSeq
       val addedFilePaths = addedFiles.keys.toSeq
+      //将JVM参数、Spark属性、系统属性、classPath等信息设置为环境明细信息
       val environmentDetails = SparkEnv.environmentDetails(conf, schedulingMode, addedJarPaths,
         addedFilePaths)
+      //生成SparkListenerEnvironmentUpdate事件，并投递到事件总线
+      //此事件最终将被EnvironmentListener监听
       val environmentUpdate = SparkListenerEnvironmentUpdate(environmentDetails)
       listenerBus.post(environmentUpdate)
     }

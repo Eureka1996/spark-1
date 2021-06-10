@@ -57,8 +57,11 @@ import org.apache.spark.network.util.*;
  */
 public class TransportClientFactory implements Closeable {
 
-  /** A simple data structure to track the pool of clients between two peer nodes. */
+  /** A simple data structure to track the pool of clients between two peer nodes.
+   * ClientPool是由TransportClient的数组构成的。内部静态私有类
+   * */
   private static class ClientPool {
+    //locks与clients一一对应
     TransportClient[] clients;
     Object[] locks;
 
@@ -86,9 +89,9 @@ public class TransportClientFactory implements Closeable {
 
   //客户端Channel被创建时使用的类，通过ioMode来匹配，默认为NioSocketChannel，Spark还支持EpollEventLoopGroup
   private final Class<? extends Channel> socketChannelClass;
-  //根据Netty的规范，客户端只有worker组
+  //根据Netty的规范，客户端只有worker组。workerGroup的实际类型是NioEventLoopGroup
   private EventLoopGroup workerGroup;
-
+  //汇集ByteBuf但对本地线程缓存禁用的分配器
   private PooledByteBufAllocator pooledAllocator;
   private final NettyMemoryMetrics metrics;
 
@@ -102,7 +105,7 @@ public class TransportClientFactory implements Closeable {
     this.numConnectionsPerPeer = conf.numConnectionsPerPeer();
     this.rand = new Random();
 
-    IOMode ioMode = IOMode.valueOf(conf.ioMode());
+    IOMode ioMode = IOMode.valueOf(conf.ioMode()); //默认值为NIO，Spark还支持EPOLL
     this.socketChannelClass = NettyUtils.getClientChannelClass(ioMode);
     this.workerGroup = NettyUtils.createEventLoop(
         ioMode,

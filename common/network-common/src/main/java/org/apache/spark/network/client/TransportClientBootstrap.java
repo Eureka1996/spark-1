@@ -27,8 +27,11 @@ import io.netty.channel.Channel;
  * Since connections (and TransportClients) are reused as much as possible, it is generally
  * reasonable to perform an expensive bootstrapping operation, as they often share a lifespan with
  * the JVM itself.
- */
+ * 主要有两个实现类：EncryptionDisablerBootstrap和SaslClientBootstrap
+ * */
 public interface TransportClientBootstrap {
-  /** Performs the bootstrapping operation, throwing an exception on failure. */
+  /** Performs the bootstrapping operation, throwing an exception on failure.
+   * 在连接建立时进行一些初始化的准备（例如验证、加密），但些操作是昂贵的，但建立后可重复使用。
+   * */
   void doBootstrap(TransportClient client, Channel channel) throws RuntimeException;
 }

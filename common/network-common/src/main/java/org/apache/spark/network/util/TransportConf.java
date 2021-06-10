@@ -24,7 +24,7 @@ import com.google.common.primitives.Ints;
 
 /**
  * A central location that tracks all the settings we expose to users.
- * spark通常使用SparkTransportConf创建TransportConf
+ * spark通常使用SparkTransportConf的fromSparkConf方法来创建TransportConf
  */
 public class TransportConf {
 
@@ -46,7 +46,7 @@ public class TransportConf {
   //配置提供者，ConfigProvider是个抽象类
   private final ConfigProvider conf;
 
-  //模块名称
+  //配置的模块名称
   private final String module;
 
   public TransportConf(String module, ConfigProvider conf) {

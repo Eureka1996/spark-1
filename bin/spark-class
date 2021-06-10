@@ -23,6 +23,7 @@ fi
 
 . "${SPARK_HOME}"/bin/load-spark-env.sh
 
+# 找到java命令
 # Find the java binary
 if [ -n "${JAVA_HOME}" ]; then
   RUNNER="${JAVA_HOME}/bin/java"
