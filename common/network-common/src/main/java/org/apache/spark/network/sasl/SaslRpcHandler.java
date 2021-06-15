@@ -79,6 +79,7 @@ public class SaslRpcHandler extends RpcHandler {
   public void receive(TransportClient client, ByteBuffer message, RpcResponseCallback callback) {
     if (isComplete) {
       // Authentication complete, delegate to base handler.
+      // 将消息传递给SaslRpcHandler所代理的下游RpcHandler并返回。
       delegate.receive(client, message, callback);
       return;
     }
@@ -86,6 +87,7 @@ public class SaslRpcHandler extends RpcHandler {
       ByteBuf nettyBuf = Unpooled.wrappedBuffer(message);
       SaslMessage saslMessage;
       try {
+        // 对客户端发送的消息进行SASL解密。
         saslMessage = SaslMessage.decode(nettyBuf);
       } finally {
         nettyBuf.release();
@@ -93,6 +95,7 @@ public class SaslRpcHandler extends RpcHandler {
 
       if (saslServer == null) {
         // First message in the handshake, setup the necessary state.
+        // 如果saslServer还未创建，则需要创建SparkSaslServer
         client.setClientId(saslMessage.appId);
         saslServer = new SparkSaslServer(saslMessage.appId, secretKeyHolder,
           conf.saslServerAlwaysEncrypt());
@@ -100,6 +103,7 @@ public class SaslRpcHandler extends RpcHandler {
 
       byte[] response;
       try {
+        // 使用saslServer处理已解密的消息
         response = saslServer.response(JavaUtils.bufferToArray(
           saslMessage.body().nioByteBuffer()));
       } catch (IOException ioe) {
@@ -121,6 +125,7 @@ public class SaslRpcHandler extends RpcHandler {
       }
 
       logger.debug("Enabling encryption for channel {}", client);
+      // 对管道进行SASL加密
       SaslEncryption.addToChannel(channel, saslServer, conf.maxSaslEncryptedBlockSize());
       complete(false);
       return;

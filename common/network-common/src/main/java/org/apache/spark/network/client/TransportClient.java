@@ -68,6 +68,8 @@ import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
  * responsible for handling responses from the server.
  *
  * Concurrency: thread safe and can be called from multiple threads.
+ *
+ * 每个TransportClient实例只能和一个远端的RPC服务通信，如果想要和多个RPC服务通信，就需要持有多个TransportClient实例。
  */
 public class TransportClient implements Closeable {
   private static final Logger logger = LoggerFactory.getLogger(TransportClient.class);

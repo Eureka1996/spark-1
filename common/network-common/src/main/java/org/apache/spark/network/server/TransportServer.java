@@ -66,10 +66,11 @@ public class TransportServer implements Closeable {
       List<TransportServerBootstrap> bootstraps) {
     this.context = context;
     this.conf = context.getConf();
-    this.appRpcHandler = appRpcHandler;
+    this.appRpcHandler = appRpcHandler;//RPC请求处理器
     this.bootstraps = Lists.newArrayList(Preconditions.checkNotNull(bootstraps));
 
     try {
+      //对TransportServer进行初始化
       init(hostToBind, portToBind);
     } catch (RuntimeException e) {
       JavaUtils.closeQuietly(this);
@@ -84,6 +85,17 @@ public class TransportServer implements Closeable {
     return port;
   }
 
+  /**
+   * TransportServer初始化的步骤
+   * 1. 创建bossGroup和workerGroup。
+   * 2. 创建一个汇集ByteBuf但对本地线程缓存禁用的分配器。
+   * 3. 调用Netty的API创建Netty的服务端根引导程序并对其进行配置。
+   * 4. 为根引导程序设置管道初始化回调函数，此回调函数首先设置TranspoertServerBootstrap到根引导程序中，然后调用TransportContext的
+   *  initializePipeline方法初始化Channel的pipeline。
+   * 5. 给根引导程序绑定Socket的监听端口，最后返回监听的端口。
+   * @param hostToBind
+   * @param portToBind
+   */
   private void init(String hostToBind, int portToBind) {
     //Netty服务端需同时创建bossGroup和workerGroup
     IOMode ioMode = IOMode.valueOf(conf.ioMode());

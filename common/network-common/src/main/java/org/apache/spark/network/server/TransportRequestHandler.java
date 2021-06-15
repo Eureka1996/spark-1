@@ -118,6 +118,10 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
   }
 
+  /**
+   * processFetchRequest的处理都依托于RpcHandler的StreamManager
+   * @param req
+   */
   private void processFetchRequest(final ChunkFetchRequest req) {
     if (logger.isTraceEnabled()) {
       logger.trace("Received req from {} to fetch block {}", getRemoteAddress(channel),
@@ -132,7 +136,9 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
     ManagedBuffer buf;
     try {
+      //校验客户端是否有权限从给定的流中读取
       streamManager.checkAuthorization(reverseClient, req.streamChunkId.streamId);
+      //获取单个的块，块被封装为ManagedBuffer。
       buf = streamManager.getChunk(req.streamChunkId.streamId, req.streamChunkId.chunkIndex);
     } catch (Exception e) {
       logger.error(String.format("Error opening block %s for request from %s",
@@ -142,6 +148,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
 
     streamManager.chunkBeingSent(req.streamChunkId.streamId);
+    //将ManagedBuffer和流的块Id封装为ChunkFetchSuccess后，调用respond方法返回给客户端。
     respond(new ChunkFetchSuccess(req.streamChunkId, buf)).addListener(future -> {
       streamManager.chunkSent(req.streamChunkId.streamId);
     });
@@ -162,6 +169,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
     ManagedBuffer buf;
     try {
+      //将获取到的流数据封装为ManagedBuffer
       buf = streamManager.openStream(req.streamId);
     } catch (Exception e) {
       logger.error(String.format(
@@ -183,6 +191,9 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
   private void processRpcRequest(final RpcRequest req) {
     try {
+      /*
+      RpcHandler是抽象类，其receive方法也是抽象方法，所以具体的操作将由RpcHandler的实现了receive方法的子类来完成。
+       */
       rpcHandler.receive(reverseClient, req.body().nioByteBuffer(), new RpcResponseCallback() {
         @Override
         public void onSuccess(ByteBuffer response) {
@@ -202,6 +213,10 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
   }
 
+  /**
+   * 处理无需回复的RPC请求，在处理完RPC请求后不会对客户端作出响应
+   * @param req
+   */
   private void processOneWayMessage(OneWayMessage req) {
     try {
       rpcHandler.receive(reverseClient, req.body().nioByteBuffer());
@@ -218,6 +233,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
    */
   private ChannelFuture respond(Encodable result) {
     SocketAddress remoteAddress = channel.remoteAddress();
+    //通过调用Channel的writeAndFlush方法来响应客户端
     return channel.writeAndFlush(result).addListener(future -> {
       if (future.isSuccess()) {
         logger.trace("Sent result {} to client {}", result, remoteAddress);

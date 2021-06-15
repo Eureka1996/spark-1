@@ -107,7 +107,9 @@ public class TransportContext {
     return createClientFactory(new ArrayList<>());
   }
 
-  /** Create a server which will attempt to bind to a specific port. */
+  /** Create a server which will attempt to bind to a specific port.
+   * TransportServer是RPC框架的服务端，可提供高效、低级别的流服务。
+   * */
   public TransportServer createServer(int port, List<TransportServerBootstrap> bootstraps) {
     return new TransportServer(this, null, port, rpcHandler, bootstraps);
   }
@@ -168,6 +170,7 @@ public class TransportContext {
    * Creates the server- and client-side handler which is used to handle both RequestMessages and
    * ResponseMessages. The channel is expected to have been successfully created, though certain
    * properties (such as the remoteAddress()) may not be available yet.
+   * RpcHandler与TransportClient毫无关系。
    */
   private TransportChannelHandler createChannelHandler(Channel channel, RpcHandler rpcHandler) {
     TransportResponseHandler responseHandler = new TransportResponseHandler(channel);

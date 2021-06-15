@@ -134,6 +134,17 @@ public class TransportClientFactory implements Closeable {
    * This blocks until a connection is successfully established and fully bootstrapped.
    *
    * Concurrency: This method is safe to call from multiple threads.
+   *
+   * 创建TransportClient的步骤：
+   * 1. 调用InetSocketAddress的静态方法createUnresolved构建InetSocketAddress。
+   * 此种方法可以在缓存中已经有TransportClient时避免不必要的域名解析。
+   * 2. 然后从connectionPool中获取与此地址对应的ClientPool，如果没有，则创建，并放入到connectionPool中。
+   * 3. 根据numConnectionsPerPeer的大小，从ClientPool中随机选择一个TransportClient。
+   * 4. 如果ClientPool的clients数组中在随机产生的索引位置不存在TransportClient或者TransportClient没有激活，则进入第6步。
+   * 否则对此TransportClient进行第5步的检查。
+   * 5. 更新TransportClient的Channel中配置的TransportChannelHandler的最后一次使用时间，确保channel没有超时，
+   * 然后检查TransportClient是否是激活状态，最后返回此TransportClient给调用方
+   * 6. 缓存中没有TransportClient可用，调用InetSocketAddress的构造器创建InetSocketAddress对象
    */
   public TransportClient createClient(String remoteHost, int remotePort)
       throws IOException, InterruptedException {
@@ -149,10 +160,11 @@ public class TransportClientFactory implements Closeable {
       connectionPool.putIfAbsent(unresolvedAddress, new ClientPool(numConnectionsPerPeer));
       clientPool = connectionPool.get(unresolvedAddress);
     }
-
+    //随机选择一个TransportClient
     int clientIndex = rand.nextInt(numConnectionsPerPeer);
     TransportClient cachedClient = clientPool.clients[clientIndex];
 
+    //获取并返回激活的TransportClient
     if (cachedClient != null && cachedClient.isActive()) {
       // Make sure that the channel will not timeout by updating the last use time of the
       // handler. Then check that the client is still alive, in case it timed out before
@@ -181,6 +193,7 @@ public class TransportClientFactory implements Closeable {
       logger.trace("DNS resolution for {} took {} ms", resolvedAddress, hostResolveTimeMs);
     }
 
+    //创建并返回TransportClient对象
     synchronized (clientPool.locks[clientIndex]) {
       cachedClient = clientPool.clients[clientIndex];
 
@@ -209,11 +222,13 @@ public class TransportClientFactory implements Closeable {
     return createClient(address);
   }
 
-  /** Create a completely new {@link TransportClient} to the remote address. */
+  /** Create a completely new {@link TransportClient} to the remote address.
+   * TransportClient的创建过程在此重载的createClient方法
+   * */
   private TransportClient createClient(InetSocketAddress address)
       throws IOException, InterruptedException {
     logger.debug("Creating new connection to {}", address);
-
+    //构建根引导程序Bootstrap并对其进行配置
     Bootstrap bootstrap = new Bootstrap();
     bootstrap.group(workerGroup)
       .channel(socketChannelClass)
@@ -234,6 +249,7 @@ public class TransportClientFactory implements Closeable {
     final AtomicReference<TransportClient> clientRef = new AtomicReference<>();
     final AtomicReference<Channel> channelRef = new AtomicReference<>();
 
+    //为根引导程序设置管道初始化回调函数
     bootstrap.handler(new ChannelInitializer<SocketChannel>() {
       @Override
       public void initChannel(SocketChannel ch) {
@@ -245,6 +261,7 @@ public class TransportClientFactory implements Closeable {
 
     // Connect to the remote server
     long preConnect = System.nanoTime();
+    //使用根引导程序连接远程服务器
     ChannelFuture cf = bootstrap.connect(address);
     if (!cf.await(conf.connectionTimeoutMs())) {
       throw new IOException(
@@ -262,6 +279,7 @@ public class TransportClientFactory implements Closeable {
     logger.debug("Connection to {} successful, running bootstraps...", address);
     try {
       for (TransportClientBootstrap clientBootstrap : clientBootstraps) {
+        //给TransportClient设置客户端引导程序，即设置TransportClientFactory中的TransportClientBootstrap列表。
         clientBootstrap.doBootstrap(client, channel);
       }
     } catch (Exception e) { // catch non-RuntimeExceptions too as bootstrap may be written in Scala

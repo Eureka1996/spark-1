@@ -36,6 +36,7 @@ import org.apache.spark.network.util.TransportConf;
 
 /**
  * A {@link ManagedBuffer} backed by a segment in a file.
+ * 此类的作用为获取一个文件中的一段。
  */
 public final class FileSegmentManagedBuffer extends ManagedBuffer {
   private final TransportConf conf;
@@ -45,9 +46,9 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
 
   public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length) {
     this.conf = conf;
-    this.file = file;
-    this.offset = offset;
-    this.length = length;
+    this.file = file; //所要读取的文件。
+    this.offset = offset; //所要读取文件的偏移量。
+    this.length = length; //所要读取的长度。
   }
 
   @Override
