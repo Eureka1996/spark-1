@@ -82,7 +82,9 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
   }
 
   public void addRpcRequest(long requestId, RpcResponseCallback callback) {
+    // 更新最后一次请求的时间为当前系统时间
     updateTimeOfLastRequest();
+    //outstandingRpcs专门用于缓存发出的RPC请求信息。
     outstandingRpcs.put(requestId, callback);
   }
 
@@ -184,20 +186,25 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
       }
     } else if (message instanceof RpcResponse) {
       RpcResponse resp = (RpcResponse) message;
+      //获取回调
       RpcResponseCallback listener = outstandingRpcs.get(resp.requestId);
       if (listener == null) {
         logger.warn("Ignoring response for RPC {} from {} ({} bytes) since it is not outstanding",
           resp.requestId, getRemoteAddress(channel), resp.body().size());
       } else {
+        // 移除outstandingRpcs缓存中requestId和RpcResponseCallback的注册信息。
         outstandingRpcs.remove(resp.requestId);
         try {
+          //这里的RpcResponseCallback需要在各个使用TransportClient的sendRpc方法的场景中分别实现。
           listener.onSuccess(resp.body().nioByteBuffer());
         } finally {
+          //释放RpcResponse的body，回收资源
           resp.body().release();
         }
       }
     } else if (message instanceof RpcFailure) {
       RpcFailure resp = (RpcFailure) message;
+      //获取回调
       RpcResponseCallback listener = outstandingRpcs.get(resp.requestId);
       if (listener == null) {
         logger.warn("Ignoring response for RPC {} from {} ({}) since it is not outstanding",
