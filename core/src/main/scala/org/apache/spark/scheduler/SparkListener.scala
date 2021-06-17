@@ -172,6 +172,9 @@ case class SparkListenerLogStart(sparkVersion: String) extends SparkListenerEven
  * extend SparkListener or SparkFirehoseListener directly, rather than implementing this class.
  *
  * Note that this is an internal interface which might change in different Spark releases.
+ *
+ * 定义了所有SparkListener应当遵守的接口规范。
+ *
  */
 private[spark] trait SparkListenerInterface {
 

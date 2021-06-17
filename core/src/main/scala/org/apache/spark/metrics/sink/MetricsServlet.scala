@@ -29,6 +29,12 @@ import org.eclipse.jetty.servlet.ServletContextHandler
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.ui.JettyUtils._
 
+/**
+ * 在Spark UI的jetty服务中创建ServletContextHandler，将度量数据通过Spark UI展示在浏览器中。
+ * @param property
+ * @param registry
+ * @param securityMgr
+ */
 private[spark] class MetricsServlet(
     val property: Properties,
     val registry: MetricRegistry,

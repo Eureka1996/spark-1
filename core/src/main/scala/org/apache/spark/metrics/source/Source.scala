@@ -21,5 +21,6 @@ import com.codahale.metrics.MetricRegistry
 
 private[spark] trait Source {
   def sourceName: String
+  //当前度量源的注册表
   def metricRegistry: MetricRegistry
 }
