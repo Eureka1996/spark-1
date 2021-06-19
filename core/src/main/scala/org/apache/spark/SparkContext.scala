@@ -78,7 +78,7 @@ class SparkContext(config: SparkConf) extends Logging {
   // If true, log warnings instead of throwing exceptions when multiple SparkContexts are active
   // SparkContext默认只有一个实例。如果在config（SparkConf）中设置了allowMultipleContexts为true，
   // 当存在多个active级别的SparkContext实例时Spark会发生警告，而不是抛出异常，要特别注意。
-  // 如果没有配置，则默认为false
+  // 如果没有配置(spark.driver.allowMultipleContexts)，则默认为false
   private val allowMultipleContexts: Boolean =
     config.getBoolean("spark.driver.allowMultipleContexts", false)
 
@@ -196,31 +196,85 @@ class SparkContext(config: SparkConf) extends Logging {
    * ------------------------------------------------------------------------------------- */
 
   private var _conf: SparkConf = _
+  /*
+  事件日志的路径。
+  当spark.eventLog.enabled属性为true时启用。默认为/tmp/spark-events，
+  也可以通过spark.eventLog.dir属性指定。
+   */
   private var _eventLogDir: Option[URI] = None
+  /*
+  事件日志的压缩算法。
+  当spark.eventLog.enabled属性与spark.eventLog.compress属性皆为true时启用。
+
+   */
   private var _eventLogCodec: Option[String] = None
+  /*
+  SparkContext中的事件总线，可以接收各个使用方的事件，并且通过异步方式对事件进行匹配后调用SparkListener的不同方法。
+   */
   private var _listenerBus: LiveListenerBus = _
   //在Spark中，凡是需要执行任务的地方就需要SparkEnv。在生产环境中，SparkEnv往往运行于不同节点的Executor中。
   // 但是由于Local模式在本地执行的需要，因此在Driver本地的Executor也需要SparkEnv
   private var _env: SparkEnv = _
+  // 提供对Job、Stage等的监控信息。SparkStatusTracker是一个低级的API，这意味着只能提供非常脆弱的一致性机制。
   private var _statusTracker: SparkStatusTracker = _
+  /*
+  利用SparkStatusTracker的API，在控制台展示Stage的进度。
+  由于SparkStatusTracker存在的一致性问题，所以ConsoleProgressBar在控制台的显示往往有一定的时延。
+   */
   private var _progressBar: Option[ConsoleProgressBar] = None
+  //Spark的用户界面，SparkUI将从各个SparkListener中读取数据并显示到Web界面。
   private var _ui: Option[SparkUI] = None
+  /*
+  Hadoop的配置信息。
+  如果系统属性SPARK_YARN_MODE为true或者环境变量SPARK_YARN_MODE为true，那么将会是yarn的配置，否则为hadoop配置。
+   */
   private var _hadoopConfiguration: Configuration = _
+  /*
+  Executor的内存大小。默认值为1024MB。
+  可以通过环境变量SPARK_MEM或者SPARK_EXECUTOR_MEMORY或者spark.executor.memory属性指定。
+  spark.executor.memory是优先级最高，SPARK_EXECUTOR_MERORY次之，SPARK_MEM是老版本spark遗留下来的配置方式，未来将会废弃。
+   */
   private var _executorMemory: Int = _
   private var _schedulerBackend: SchedulerBackend = _
+  /*
+  任务调度器，是调度系统中的重要组件之一。
+  TaskScheduler按照调度算法对集群管理器已经分配给应用程序的资源进行二次调度后分配给任务。
+  TaskScheduler调度的Task是由DAGScheduler创建的，所以DAGScheduler是TaskScheduler的前置调度。
+   */
   private var _taskScheduler: TaskScheduler = _
+  /*
+  心跳接收器。
+  所有Executor都会向HeartbeatReceiver发送心跳信息，
+  HeartbeatReceiver接收到Executor的心跳信息后，首先更新Executor的最后可见时间，然后将此信息交给TaskScheduler作进一步处理。
+   */
   private var _heartbeatReceiver: RpcEndpointRef = _
+  /*
+  DAG调度器，是调度系统中的重要组件之一，负责创建Job，将DAG中的RDD划分到不同的stage、提交stage等。
+  SparkUI中有关Job和Stage的监控数据都来自DAGScheduler。
+   */
   @volatile private var _dagScheduler: DAGScheduler = _
+  //当前应用的标识，是应用程序向Master注册时，Master为其创建的应用标识。
   private var _applicationId: String = _
+  //当前应用尝试执行的标识。Spark Driver在执行时会多次尝试执行，每次尝试都将会生成一个标识来代表应用尝试执行的身份。
   private var _applicationAttemptId: Option[String] = None
+  //将事件持久化存储的监听器，是SparkContext中的可选组件。当spark.eventLog.enabled属性为true时启用。
   private var _eventLogger: Option[EventLoggingListener] = None
   //Executor动态分配管理器。可以根据工作负载动态调整Executor的数量。
   private var _executorAllocationManager: Option[ExecutorAllocationManager] = None
   //用于清理那些超出应用范围的RDD、Shuffle对应的map任务状态、Shuffle元数据、Broadcast对象及RDD的Checkpoint数据。
   private var _cleaner: Option[ContextCleaner] = None
+  //LiveListenerBus是否已经启动的标记。
   private var _listenerBusStarted: Boolean = false
+  /*
+  用户设置的Jar文件。
+  当用户选择的部署模式是yarn时，_jars是由spark.jars属性指定的Jar文件 和spark.yarn.dist.jars属性指定的Jar文件的并集。
+  其他模式下只采用由spark.jars属性指定的Jar文件。
+   */
   private var _jars: Seq[String] = _
+  // 用户设置的文件。可以使用spark.files属性进行指定。
   private var _files: Seq[String] = _
+  //ShutdownHookManager，用于设置关闭钩子的管理器。可以给应用设置关闭钩子，这样就可以在
+  //JVM进程退出时，执行一些清理工作。
   private var _shutdownHookRef: AnyRef = _
   private var _statusStore: AppStatusStore = _
 
@@ -270,10 +324,13 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def env: SparkEnv = _env
 
   // Used to store a URL for each static file/jar together with the file's local timestamp
+  //用于每个本地文件的URL与添加此文件到addedFiles时的时间戳之间的映射缓存。
   private[spark] val addedFiles = new ConcurrentHashMap[String, Long]().asScala
+  //用于每个本地Jar文件的URL与添加此文件到addedJars时的时间戳之间的映射缓存。
   private[spark] val addedJars = new ConcurrentHashMap[String, Long]().asScala
 
   // Keeps track of all persisted RDDs
+  // 用于对所有持久化的RDD保持跟踪
   private[spark] val persistentRdds = {
     val map: ConcurrentMap[Int, RDD[_]] = new MapMaker().weakValues().makeMap[Int, RDD[_]]()
     map.asScala
@@ -297,9 +354,11 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def executorMemory: Int = _executorMemory
 
   // Environment variables to pass to our executors.
+  // 用于存储环境变量。executorEnvs中环境变量都将传递给执行任务的Executor使用。
   private[spark] val executorEnvs = HashMap[String, String]()
 
   // Set SPARK_USER for user who is running SparkContext.
+  // 当前系统的登录用户，也可以通过系统环境变量SPARK_USER进行设置。
   val sparkUser = Utils.getCurrentUserName()
 
   private[spark] def schedulerBackend: SchedulerBackend = _schedulerBackend
@@ -332,10 +391,10 @@ class SparkContext(config: SparkConf) extends Logging {
     _executorAllocationManager
 
   private[spark] def cleaner: Option[ContextCleaner] = _cleaner
-
   private[spark] var checkpointDir: Option[String] = None
 
   // Thread Local variable that can be used by users to pass information down the stack
+  // 由InheritableThreadLocal保护的线程本地变量，其中属性值可以沿着线程栈传递下去，供用户使用。
   protected[spark] val localProperties = new InheritableThreadLocal[Properties] {
     override protected def childValue(parent: Properties): Properties = {
       // Note: make a clone such that changes in the parent properties aren't reflected in
@@ -431,7 +490,12 @@ class SparkContext(config: SparkConf) extends Logging {
     listenerBus.addToStatusQueue(_statusStore.listener.get)
 
     // Create the Spark execution environment (cache, map output tracker, etc)
+    /*
+    SparkEnv内的很多组件都将向LiveListenerBus的事件队列中投递事件，所以首先创建LiveListenerBus，
+    然后将LiveListenerBus通过SparkEnv的构造器传递给SparkEnv和SparkEnv内部的组件。
+     */
     _env = createSparkEnv(_conf, isLocal, listenerBus)
+    //设置到SparkEnv伴生对象的env属性。
     SparkEnv.set(_env)
 
     // If running the REPL, register the repl's output dir with the file server.
@@ -440,8 +504,10 @@ class SparkContext(config: SparkConf) extends Logging {
       _conf.set("spark.repl.class.uri", replUri)
     }
 
+    // 创建Spark状态跟踪器
     _statusTracker = new SparkStatusTracker(this, _statusStore)
 
+    // 创建ConsoleProgressBar
     _progressBar =
       if (_conf.get(UI_SHOW_CONSOLE_PROGRESS) && !log.isInfoEnabled) {
         Some(new ConsoleProgressBar(this))
@@ -459,6 +525,7 @@ class SparkContext(config: SparkConf) extends Logging {
       }
     // Bind the UI before starting the task scheduler to communicate
     // the bound port to the cluster manager properly
+    // SparkUI继承自WebUI，因此调用WebUI的bind方法启动SparkUI底层的Jetty服务。
     _ui.foreach(_.bind())
 
     _hadoopConfiguration = SparkHadoopUtil.get.newConfiguration(_conf)
@@ -505,10 +572,13 @@ class SparkContext(config: SparkConf) extends Logging {
     _schedulerBackend = sched
     _taskScheduler = ts
     _dagScheduler = new DAGScheduler(this)
+    // 向HeartbeatReceiver发送TaskSchedulerIsSet消息，表示SparkContext的_taskScheduler属性已经持有了TaskScheduler的引用。
+    // HeartbeatReceiver接收到TaskSchedulerIsSet消息后，将获取SparkContext的_taskScheduler属性设置到自身的Scheduler属性中。
     _heartbeatReceiver.ask[Boolean](TaskSchedulerIsSet)
 
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
+    // TaskScheduler在启动的时候还会启动DAGScheduler
     _taskScheduler.start()
 
     _applicationId = _taskScheduler.applicationId()
@@ -518,6 +588,7 @@ class SparkContext(config: SparkConf) extends Logging {
       System.setProperty("spark.ui.proxyBase", "/proxy/" + _applicationId)
     }
     _ui.foreach(_.setAppId(_applicationId))
+    // BlockManager是SparkEnv中的组件之一，从命名来看应该是Block的管理器，实际上囊括了存储体系的所有组件和功能，是存储体系中最重要的组件。
     _env.blockManager.initialize(_applicationId)
 
     // The metrics system for Driver need to be set spark.app.id to app ID.
@@ -540,6 +611,9 @@ class SparkContext(config: SparkConf) extends Logging {
 
     // Optionally scale number of executors dynamically based on workload. Exposed for testing.
     val dynamicAllocationEnabled = Utils.isDynamicAllocationEnabled(_conf)
+    /*
+    ExecutorAllocationManager内部会定时根据工作负载计算所需的Executor数量。
+     */
     _executorAllocationManager =
       if (dynamicAllocationEnabled) {
         schedulerBackend match {
@@ -2353,11 +2427,11 @@ class SparkContext(config: SparkConf) extends Logging {
    * The reasons for this are discussed in https://github.com/mesos/spark/pull/718
    */
   def defaultMinPartitions: Int = math.min(defaultParallelism, 2)
-
+  // 用于生成下一个Shuffle的身份标识。
   private val nextShuffleId = new AtomicInteger(0)
 
   private[spark] def newShuffleId(): Int = nextShuffleId.getAndIncrement()
-
+  // 用于生成下一个RDD的身份标识
   private val nextRddId = new AtomicInteger(0)
 
   /** Register a new RDD, returning its RDD ID */
@@ -2370,6 +2444,7 @@ class SparkContext(config: SparkConf) extends Logging {
    */
   private def setupAndStartListenerBus(): Unit = {
     try {
+      // 获取用户自定义的SparkListener的类名。
       conf.get(EXTRA_LISTENERS).foreach { classNames =>
         val listeners = Utils.loadExtensions(classOf[SparkListenerInterface], classNames, conf)
         listeners.foreach { listener =>
@@ -2385,7 +2460,7 @@ class SparkContext(config: SparkConf) extends Logging {
           throw new SparkException(s"Exception when registering SparkListener", e)
         }
     }
-
+    // 启动事件总线，并将_listenerBusStarted置为true。
     listenerBus.start(this, _env.metricsSystem)
     _listenerBusStarted = true
   }

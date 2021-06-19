@@ -191,31 +191,37 @@ private[spark] class SecurityManager(
 
   // allow all users/groups to have view/modify permissions
   private val WILDCARD_ACL = "*"
-
+  // 是否开启认证，默认为false
   private val authOn = sparkConf.get(NETWORK_AUTH_ENABLED)
   // keep spark.ui.acls.enable for backwards compatibility with 1.0
+  // 是否对账号进行授权检查，默认值为false
   private var aclsOn =
     sparkConf.getBoolean("spark.acls.enable", sparkConf.getBoolean("spark.ui.acls.enable", false))
 
   // admin acls should be set before view or modify acls
+  // 管理员账号集合
   private var adminAcls: Set[String] =
     stringToSet(sparkConf.get("spark.admin.acls", ""))
 
   // admin group acls should be set before view or modify group acls
+  // 管理员账号所在组的集合
   private var adminAclsGroups : Set[String] =
     stringToSet(sparkConf.get("spark.admin.acls.groups", ""))
-
+  // 有查看权限的账号的集合
   private var viewAcls: Set[String] = _
-
+  // 拥有查看权限的账号所在组的集合
   private var viewAclsGroups: Set[String] = _
 
   // list of users who have permission to modify the application. This should
   // apply to both UI and CLI for things like killing the application.
+  // 有修改权限的账号的集合
   private var modifyAcls: Set[String] = _
 
+  // 有修改权限的账号所在组的集合。
   private var modifyAclsGroups: Set[String] = _
 
   // always add the current user and SPARK_USER to the viewAcls
+  // 默认用户。
   private val defaultAclUsers = Set[String](System.getProperty("user.name", ""),
     Utils.getCurrentUserName())
 
@@ -224,7 +230,7 @@ private[spark] class SecurityManager(
 
   setViewAclsGroups(sparkConf.get("spark.ui.view.acls.groups", ""));
   setModifyAclsGroups(sparkConf.get("spark.modify.acls.groups", ""));
-
+  // 密钥
   private var secretKey: String = _
   logInfo("SecurityManager: authentication " + (if (authOn) "enabled" else "disabled") +
     "; ui acls " + (if (aclsOn) "enabled" else "disabled") +

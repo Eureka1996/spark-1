@@ -228,7 +228,7 @@ private[spark] class ExecutorAllocationManager(
   def start(): Unit = {
     //向事件总线添加ExecutorAllocationListener
     listenerBus.addToManagementQueue(listener)
-
+    // 创建定时调度的任务
     val scheduleTask = new Runnable() {
       override def run(): Unit = {
         try {
@@ -245,6 +245,9 @@ private[spark] class ExecutorAllocationManager(
     //executor是只有一个线程的ScheduledThreadPoolExecutor，以固定的间隔intervalMillis进行调度
     executor.scheduleWithFixedDelay(scheduleTask, 0, intervalMillis, TimeUnit.MILLISECONDS)
 
+    /**
+     * hostToLocalTaskCount是Host与想要在此节点上运行Task的数量之间的映射关系。
+     */
     client.requestTotalExecutors(numExecutorsTarget, localityAwareTasks, hostToLocalTaskCount)
   }
 
@@ -308,6 +311,7 @@ private[spark] class ExecutorAllocationManager(
     //重新计算所需的Executor数量，并更新请求的Executor数量
     updateAndSyncNumExecutorsTarget(now)
     if (executorIdsToBeRemoved.nonEmpty) {
+      // 对过期的Executor进行删除。
       removeExecutors(executorIdsToBeRemoved)
     }
   }
@@ -325,6 +329,7 @@ private[spark] class ExecutorAllocationManager(
    * @return the delta in the target number of executors.
    */
   private def updateAndSyncNumExecutorsTarget(now: Long): Int = synchronized {
+    // 获得实际需要的Executor的最大数量maxNeeded
     val maxNeeded = maxNumExecutorsNeeded
 
     if (initializing) { //ExecutorAllocationManager还在初始化，则返回0

@@ -37,7 +37,7 @@ private[ui] class EnvironmentPage(
       "Java Version" -> appEnv.runtime.javaVersion,
       "Java Home" -> appEnv.runtime.javaHome,
       "Scala Version" -> appEnv.runtime.scalaVersion)
-
+    //调用UIUtils的listingTable方法生成JVM运行时信息、Spark属性信息、系统属性信息、类路径信息的表格。
     val runtimeInformationTable = UIUtils.listingTable(
       propertyHeader, jvmRow, jvmInformation, fixedWidth = true)
     val sparkPropertiesTable = UIUtils.listingTable(propertyHeader, propertyRow,
@@ -54,6 +54,7 @@ private[ui] class EnvironmentPage(
         <h4>Classpath Entries</h4> {classpathEntriesTable}
       </span>
 
+    //调用UIUtils的headerSparkPage方法封装好css、js、header及页面布局等。
     UIUtils.headerSparkPage("Environment", content, parent)
   }
 

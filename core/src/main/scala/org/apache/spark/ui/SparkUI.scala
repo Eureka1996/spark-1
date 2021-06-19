@@ -50,8 +50,9 @@ private[spark] class SparkUI private (
   with Logging
   with UIRoot {
 
+  //标记当前SparkUI能否提供杀死Stage或者Job的链接
   val killEnabled = sc.map(_.conf.getBoolean("spark.ui.killEnabled", true)).getOrElse(false)
-
+  //当前应用的ID
   var appId: String = _
 
   private var streamingJobProgressListener: Option[SparkListener] = None

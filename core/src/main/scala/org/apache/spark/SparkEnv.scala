@@ -236,7 +236,7 @@ object SparkEnv extends Logging {
     if (isDriver) {
       assert(listenerBus != null, "Attempted to create driver SparkEnv with null listener bus!")
     }
-
+    // SecurityManager主要对账号、权限及身份誰进行设置和管理。
     val securityManager = new SecurityManager(conf, ioEncryptionKey)
     if (isDriver) {
       securityManager.initializeAuth()
