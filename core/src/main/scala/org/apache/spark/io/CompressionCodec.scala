@@ -54,13 +54,21 @@ private[spark] object CompressionCodec {
       || codec.isInstanceOf[LZ4CompressionCodec] || codec.isInstanceOf[ZStdCompressionCodec])
   }
 
+  /*
+  编解码器名称与编解码器的类名对应关系。
+   */
   private val shortCompressionCodecNames = Map(
     "lz4" -> classOf[LZ4CompressionCodec].getName,
     "lzf" -> classOf[LZFCompressionCodec].getName,
     "snappy" -> classOf[SnappyCompressionCodec].getName,
     "zstd" -> classOf[ZStdCompressionCodec].getName)
 
+  // 获取编解码器的名称
   def getCodecName(conf: SparkConf): String = {
+    /*
+     configKey为spark.io.compression.codec，即可以使用此属性配置需要的编解码器名称。
+     如果没有指定spark.io.compression.codec，那么编解码器的默认名称为lz4
+     */
     conf.get(configKey, DEFAULT_COMPRESSION_CODEC)
   }
 
@@ -72,6 +80,7 @@ private[spark] object CompressionCodec {
     val codecClass =
       shortCompressionCodecNames.getOrElse(codecName.toLowerCase(Locale.ROOT), codecName)
     val codec = try {
+      // 通过Java反射生成编解码器实例。
       val ctor = Utils.classForName(codecClass).getConstructor(classOf[SparkConf])
       Some(ctor.newInstance(conf).asInstanceOf[CompressionCodec])
     } catch {
