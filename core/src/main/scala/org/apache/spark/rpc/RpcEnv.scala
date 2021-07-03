@@ -98,6 +98,9 @@ private[spark] abstract class RpcEnv(conf: SparkConf) {
    * Retrieve the [[RpcEndpointRef]] represented by `uri`. This is a blocking action.
    */
   def setupEndpointRefByURI(uri: String): RpcEndpointRef = {
+    /*
+    这里的defaultLookupTimeout是通过调用RpcUtils的lookupRpcTimeout方法得到的查找超时时长。
+     */
     defaultLookupTimeout.awaitResult(asyncSetupEndpointRefByURI(uri))
   }
 

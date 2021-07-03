@@ -26,23 +26,34 @@ import org.apache.spark.util.RpcUtils
 
 /**
  * A reference for a remote [[RpcEndpoint]]. [[RpcEndpointRef]] is thread-safe.
+ *
+ * 要向一个远端的RpcEndpoint发起请求，你就必须持有这个RpcEndpoint的RpcEndpointRef。
+ * 抽象类RpcEndpointRef定义了所有RpcEndpoint引用的属性与接口。
  */
 private[spark] abstract class RpcEndpointRef(conf: SparkConf)
   extends Serializable with Logging {
-
+  // RPC最大重新连接次数。可以使用spark.rpc.numRetries属性进行配置，默认为3次。
   private[this] val maxRetries = RpcUtils.numRetries(conf)
+  // RPC每次重新连接需要等待的毫秒数。可以使用spark.rpc.retry.wait属性进行配置，默认值为3s
   private[this] val retryWaitMs = RpcUtils.retryWaitMs(conf)
+  // RPC的ask操作的默认超时时间。可以使用spark.rpc.askTimeout或者spark.network.timeout属性进行配置，默认值为120s。
+  // spark.rpc.askTimeout属性的优先级更高。
   private[this] val defaultAskTimeout = RpcUtils.askRpcTimeout(conf)
 
   /**
    * return the address for the [[RpcEndpointRef]]
+   *
+   * 返回当前RpcEndpointRef对应RpcEndpoint的RPC地址(RpcAddress)
    */
   def address: RpcAddress
 
+  // 返回当前RpcEndpointRef对应RpcEndpoint的名称。
   def name: String
 
   /**
    * Sends a one-way asynchronous message. Fire-and-forget semantics.
+   *
+   * 发送单向异步的消息。所谓单向就是发送完后就会忘记此次发送，不会有任何状态要记录，也不会期望得到服务端的回复。
    */
   def send(message: Any): Unit
 
@@ -59,6 +70,8 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)
    * receive the reply within a default timeout.
    *
    * This method only sends the message once and never retries.
+   *
+   * 以默认的超时时间作为timeout参数。
    */
   def ask[T: ClassTag](message: Any): Future[T] = ask(message, defaultAskTimeout)
 

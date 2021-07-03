@@ -28,6 +28,10 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClient}
 import org.apache.spark.rpc.{RpcAddress, RpcEnvStoppedException}
 
+/**
+ * OutboxMessage在客户端使用，是对外发送消息的封装。
+ * InboxMessage在服务端使用，是对所接收消息的封装。
+ */
 private[netty] sealed trait OutboxMessage {
 
   def sendWith(client: TransportClient): Unit
@@ -63,6 +67,8 @@ private[netty] case class RpcOutboxMessage(
 
   override def sendWith(client: TransportClient): Unit = {
     this.client = client
+    // sendRpc方法的第二个参数是RpcResponseCallback类型，RpcOutboxMessage本身也实现了RpcResponseCallback，
+    // 所以调用的时候传递了RpcOutboxMessage的this引用。
     this.requestId = client.sendRpc(content, this)
   }
 
@@ -84,28 +90,42 @@ private[netty] case class RpcOutboxMessage(
 
 }
 
+/**
+ *
+ * @param nettyEnv 当前Outbox所在节点上的NettyRpcEnv
+ * @param address Outbox所对应的远端NettyRpcEnv的地址。
+ */
 private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
 
   outbox => // Give this an alias so we can use it more clearly in closures.
 
+  // 向其他远端NettyRpcEnv上的所有RpcEndpoint发送的消息列表。
   @GuardedBy("this")
   private val messages = new java.util.LinkedList[OutboxMessage]
 
+  // 当前Outbox内的TransportClient。消息的发送都依赖于此传输客户端。
   @GuardedBy("this")
   private var client: TransportClient = null
 
   /**
    * connectFuture points to the connect task. If there is no connect task, connectFuture will be
    * null.
+   *
+   * 指向当前Outbox内连接任务的java.util.concurrent.Future引用。如果当前没有连接任务，则为null。
    */
   @GuardedBy("this")
   private var connectFuture: java.util.concurrent.Future[Unit] = null
 
+  /*
+  当前Outbox是否停止的状态。
+   */
   @GuardedBy("this")
   private var stopped = false
 
   /**
    * If there is any thread draining the message queue
+   *
+   * 表示当前Outbox内正有线程在处理messages列表中消息的状态。
    */
   @GuardedBy("this")
   private var draining = false
@@ -116,6 +136,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
    */
   def send(message: OutboxMessage): Unit = {
     val dropped = synchronized {
+      // 判断当前Outbox的状态是否已经停止
       if (stopped) {
         true
       } else {
@@ -126,6 +147,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
     if (dropped) {
       message.onFailure(new SparkException("Message is dropped because Outbox is stopped"))
     } else {
+      // 处理messages中的消息。
       drainOutbox()
     }
   }
@@ -138,6 +160,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
   private def drainOutbox(): Unit = {
     var message: OutboxMessage = null
     synchronized {
+      // 如果当前Outbox已经停止或者正在连接远端服务，则返回。
       if (stopped) {
         return
       }
@@ -145,21 +168,26 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
         // We are connecting to the remote address, so just exit
         return
       }
+      // 如果Outbox中的TransportClient为null，这说明还未连接远端服务。
+      // 此时需要调用launchConnectTask方法运行连接远端服务的任务，然后返回。
       if (client == null) {
         // There is no connect task but client is null, so we need to launch the connect task.
         launchConnectTask()
         return
       }
+      // 如果正有线程在处理，即发送，message列表中的消息，则返回。
       if (draining) {
         // There is some thread draining, so just exit
         return
       }
       message = messages.poll()
+      // 如果messages列表中没有消息要处理，则返回。否则取出其中的一条消息，并将draining状态置为true。
       if (message == null) {
         return
       }
       draining = true
     }
+    // 循环处理messages列表中的消息。
     while (true) {
       try {
         val _client = synchronized { client }
@@ -186,9 +214,20 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
     }
   }
 
+  /**
+   * 运行连接远端服务的任务。
+   */
   private def launchConnectTask(): Unit = {
+
+    /**
+     * 使用NettyRpcEnv中的clientConnectionExecutor提交Callable的匿名内部类。
+     */
     connectFuture = nettyEnv.clientConnectionExecutor.submit(new Callable[Unit] {
 
+      /**
+       * 此匿名类将调用NettyRpcEnv的createClient方法创建TransportClient,
+       * 然后调用drainOutbox方法处理outbox中的消息。
+       */
       override def call(): Unit = {
         try {
           val _client = nettyEnv.createClient(address)
@@ -257,15 +296,18 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
       if (stopped) {
         return
       }
+      // 将Outbox的停止状态stopped置为true
       stopped = true
       if (connectFuture != null) {
         connectFuture.cancel(true)
       }
+      // 关闭Outbox中的TransportClient.
       closeClient()
     }
 
     // We always check `stopped` before updating messages, so here we can make sure no thread will
     // update messages and it's safe to just drain the queue.
+    // 清空messages列表中的消息。
     var message = messages.poll()
     while (message != null) {
       message.onFailure(new SparkException("Message is dropped because Outbox is stopped"))

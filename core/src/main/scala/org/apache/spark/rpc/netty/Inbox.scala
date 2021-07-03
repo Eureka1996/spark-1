@@ -28,31 +28,55 @@ import org.apache.spark.rpc.{RpcAddress, RpcEndpoint, ThreadSafeRpcEndpoint}
 
 private[netty] sealed trait InboxMessage
 
+/**
+ * RpcEndpoint处理此类型的消息后不需要向客户端回复信息。
+ * @param senderAddress
+ * @param content
+ */
 private[netty] case class OneWayMessage(
     senderAddress: RpcAddress,
     content: Any) extends InboxMessage
 
+/**
+ * RPC消息，RpcEndpoint处理完此消息后需要向客户端回复信息。
+ * @param senderAddress
+ * @param content
+ * @param context
+ */
 private[netty] case class RpcMessage(
     senderAddress: RpcAddress,
     content: Any,
     context: NettyRpcCallContext) extends InboxMessage
 
+/**
+ * 用于Inbox实例化后，再通知与此Inbox相关联的RpcEndpoint启动。
+ */
 private[netty] case object OnStart extends InboxMessage
 
+/**
+ * 用于Inbox停止后，通知与此Inbox相关联的RpcEndpoint停止。
+ */
 private[netty] case object OnStop extends InboxMessage
 
-/** A message to tell all endpoints that a remote process has connected. */
+/** A message to tell all endpoints that a remote process has connected.
+ * 此消息用于告诉所有的RpcEndpoint，有远端的进程已经与当前RPC服务建立了连接。
+ * */
 private[netty] case class RemoteProcessConnected(remoteAddress: RpcAddress) extends InboxMessage
 
 /** A message to tell all endpoints that a remote process has disconnected. */
 private[netty] case class RemoteProcessDisconnected(remoteAddress: RpcAddress) extends InboxMessage
 
-/** A message to tell all endpoints that a network error has happened. */
+/** A message to tell all endpoints that a network error has happened.
+ * 此消息用于告诉所有的RpcEndpoint，与远端某个地址之间的连接发生了错误。
+ * */
 private[netty] case class RemoteProcessConnectionError(cause: Throwable, remoteAddress: RpcAddress)
   extends InboxMessage
 
 /**
  * An inbox that stores messages for an [[RpcEndpoint]] and posts messages to it thread-safely.
+ *
+ * 端点内的盒子，每个RpcEndpoint都有一个对应的盒子，这个盒子里有个存储InboxMessage消息的列表messages.
+ * 所有的消息将缓存在messages列表里面，并由RpcEndpoint异步处理这些消息。
  */
 private[netty] class Inbox(
     val endpointRef: NettyRpcEndpointRef,
@@ -64,15 +88,21 @@ private[netty] class Inbox(
   @GuardedBy("this")
   protected val messages = new java.util.LinkedList[InboxMessage]()
 
-  /** True if the inbox (and its associated endpoint) is stopped. */
+  /** True if the inbox (and its associated endpoint) is stopped.
+   * Inbox的停止状态。
+   * */
   @GuardedBy("this")
   private var stopped = false
 
-  /** Allow multiple threads to process messages at the same time. */
+  /** Allow multiple threads to process messages at the same time.
+   * 是否允许多个线程同时处理message中的消息。
+   * */
   @GuardedBy("this")
   private var enableConcurrent = false
 
-  /** The number of threads processing messages for this inbox. */
+  /** The number of threads processing messages for this inbox.
+   * 激活线程的数量，即正在处理messages中消息的线程数量。
+   * */
   @GuardedBy("this")
   private var numActiveThreads = 0
 
@@ -87,6 +117,11 @@ private[netty] class Inbox(
   def process(dispatcher: Dispatcher): Unit = {
     var message: InboxMessage = null
     inbox.synchronized {
+      /*
+     进行线程并发检查。
+     如果不允许多个线程同时处理messages中的消息，并且当前激活线程数不为0，
+     说明已经有线程在处理消息，所以当前线程不允许再去处理消息。
+     */
       if (!enableConcurrent && numActiveThreads != 0) {
         return
       }
@@ -150,12 +185,16 @@ private[netty] class Inbox(
       inbox.synchronized {
         // "enableConcurrent" will be set to false after `onStop` is called, so we should check it
         // every time.
+        /*
+        如果不允许多个线程同时处理message中的消息并且当前激活的线程数多于1个，那么需要当前线程退出并将numActiveThreads减1.
+         */
         if (!enableConcurrent && numActiveThreads != 1) {
           // If we are not the only one worker, exit
           numActiveThreads -= 1
           return
         }
         message = messages.poll()
+        // 已经没有消息要处理了
         if (message == null) {
           numActiveThreads -= 1
           return
@@ -164,6 +203,7 @@ private[netty] class Inbox(
     }
   }
 
+  // Inbox未停止时向messages列表加入消息。
   def post(message: InboxMessage): Unit = inbox.synchronized {
     if (stopped) {
       // We already put "OnStop" into "messages", so we should drop further messages
@@ -183,6 +223,11 @@ private[netty] class Inbox(
       // safely.
       enableConcurrent = false
       stopped = true
+      /*
+      向message中添加OnStop消息。
+      为了能够处理OnStop消息，只有Inbox所属的EndpointData放入receivers中，其messages列表中的消息才会被处理。
+      OnStop被处理时，通过调用Dispatcher的removeRpcEndpointRef方法，将RpcEndpoint与RpcEndpointRef的映射从缓存endpointRefs中移除。
+       */
       messages.add(OnStop)
       // Note: The concurrent events in messages will be processed one by one.
     }
