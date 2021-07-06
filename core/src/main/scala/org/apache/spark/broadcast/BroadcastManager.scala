@@ -26,21 +26,30 @@ import org.apache.commons.collections.map.{AbstractReferenceMap, ReferenceMap}
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.internal.Logging
 
+/**
+ * BroadcastManager用于将配置信息和序列化后的RDD、Job及ShuffleDependency等信息在本地存储。
+ * @param isDriver
+ * @param conf
+ * @param securityManager
+ */
 private[spark] class BroadcastManager(
     val isDriver: Boolean,
     conf: SparkConf,
     securityManager: SecurityManager)
   extends Logging {
 
+  // 表示BroadcastManager是否初始化完成的状态。
   private var initialized = false
+  // 广播工厂实例
   private var broadcastFactory: BroadcastFactory = null
 
+  // 当initialize执行完毕，BroadcastManager就正式生效。
   initialize()
 
   // Called by SparkContext or Executor before using Broadcast
   private def initialize() {
     synchronized {
-      if (!initialized) {
+      if (!initialized) { // 首先判断BroadcastManager是否已经初始化，以保证BroadcastManager只被初始化一次。
         broadcastFactory = new TorrentBroadcastFactory
         broadcastFactory.initialize(isDriver, conf, securityManager)
         initialized = true
@@ -52,6 +61,7 @@ private[spark] class BroadcastManager(
     broadcastFactory.stop()
   }
 
+  // 下一个广播对象的广播ID
   private val nextBroadcastId = new AtomicLong(0)
 
   private[broadcast] val cachedValues = {
