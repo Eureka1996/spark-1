@@ -33,10 +33,17 @@ private[spark] class MetricsConfig(conf: SparkConf) extends Logging {
   private val DEFAULT_PREFIX = "*"
   private val INSTANCE_REGEX = "^(\\*|[a-zA-Z]+)\\.(.+)".r
   private val DEFAULT_METRICS_CONF_FILENAME = "metrics.properties"
-
+  // 度量的属性信息。
   private[metrics] val properties = new Properties()
+  // 每个实例的子属性。缓存每个实例与其属性的映射关系。
   private[metrics] var perInstanceSubProperties: mutable.HashMap[String, Properties] = null
 
+  /**
+   * 默认配置下，Spark度量系统的属性配置只有Sink，却没有Source。
+   * 度量系统中的Sink都通过Spark属性或者从文件中加载，而Source除了与Sink相同的两种方式外，
+   * Spark的实现中，很多地方都是调用MetricsSystem的registerSource方法注册各种Source的。
+   * @param prop
+   */
   private def setDefaultProperties(prop: Properties) {
     prop.setProperty("*.sink.servlet.class", "org.apache.spark.metrics.sink.MetricsServlet")
     prop.setProperty("*.sink.servlet.path", "/metrics/json")
@@ -55,6 +62,10 @@ private[spark] class MetricsConfig(conf: SparkConf) extends Logging {
     loadPropertiesFromFile(conf.getOption("spark.metrics.conf"))
 
     // Also look for the properties in provided Spark configuration
+    /**
+     * 从SparkConf中查找以spark.metrics.conf.为前缀的配置属性，并且截取key的前缀后的部分作为
+     * 度量属性的key/value不变。
+     */
     val prefix = "spark.metrics.conf."
     conf.getAll.foreach {
       case (k, v) if k.startsWith(prefix) =>
@@ -99,6 +110,9 @@ private[spark] class MetricsConfig(conf: SparkConf) extends Logging {
    * Map("*" -> Properties("sink.servlet.class" -> "class1"))
    * Any passed in properties, not complying with the regex are ignored.
    *
+   * 对于properties中的每个属性kv，通过正则表达式匹配出kv的key的前缀和后缀，
+   * 以前缀为实例，后缀作为新的属性kv2的key，kv的value作为新的属性kv2的value，最后将属性kv2添加到实例对应的属性集合中作为实例的属性。
+   *
    * @param prop the flat list of properties to "unflatten" based on prefixes
    * @param regex the regex that the prefix has to comply with
    * @return an unflatted map, mapping prefix with sub-properties under that prefix
@@ -124,6 +138,8 @@ private[spark] class MetricsConfig(conf: SparkConf) extends Logging {
   /**
    * Loads configuration from a config file. If no config file is provided, try to get file
    * in class path.
+   *
+   * 如果没有指定度量属性文件或者此文件不存在，那么将从路径下的属性文件metrics.properties中加载度量属性。
    */
   private[this] def loadPropertiesFromFile(path: Option[String]): Unit = {
     var is: InputStream = null

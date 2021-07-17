@@ -292,19 +292,32 @@ object SparkEnv extends Logging {
 
     val closureSerializer = new JavaSerializer(conf)
 
+    /**
+     * SparkEnv中用于注册RpcEndpoint或者查找RpcEndpoint的方法。
+     * @param name
+     * @param endpointCreator
+     * @return
+     */
     def registerOrLookupEndpoint(
         name: String, endpointCreator: => RpcEndpoint):
       RpcEndpointRef = {
-      if (isDriver) {
+      if (isDriver) {  // 如果当前实例是Driver
         logInfo("Registering " + name)
+        // 向Dispatcher注册Endpoint
         rpcEnv.setupEndpoint(name, endpointCreator)
       } else {
+        /**
+         * 如果是Executor，则调用工具类RpcUtils的makeDriverRef方法向远端的NettyRpcEnv询问获取
+         * 相关RpcEndpoint的RpcEndpointRef。
+         */
         RpcUtils.makeDriverRef(name, conf, rpcEnv)
       }
     }
 
     val broadcastManager = new BroadcastManager(isDriver, conf, securityManager)
-
+    /**
+     * mapOutoutTracker用于跟踪map任务的输出状态，此状态便于reduce任务定位map输出结果所在的节点地址，进而获取中间输出结果。
+     */
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf, broadcastManager, isLocal)
     } else {
@@ -313,6 +326,9 @@ object SparkEnv extends Logging {
 
     // Have to assign trackerEndpoint after initialization as MapOutputTrackerEndpoint
     // requires the MapOutputTracker itself
+    /**
+     * 无论是Driver还是Executor，最后都由mapOutputTracker的属性trackerEndpoint持有MapOutputTrackermasterEndpoint的引用。
+     */
     mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(MapOutputTracker.ENDPOINT_NAME,
       new MapOutputTrackerMasterEndpoint(
         rpcEnv, mapOutputTracker.asInstanceOf[MapOutputTrackerMaster], conf))
@@ -333,13 +349,20 @@ object SparkEnv extends Logging {
       } else {
         UnifiedMemoryManager(conf, numUsableCores)
       }
-
+    /**
+     * 获取当前SparkEnv的块传输服务BlockTransferService对外提供的端口号。
+     */
     val blockManagerPort = if (isDriver) {
       conf.get(DRIVER_BLOCK_MANAGER_PORT)
     } else {
       conf.get(BLOCK_MANAGER_PORT)
     }
 
+    /**
+     * 创建块传输服务BlockTransferService。
+     * 这里使用的是BlockTransferService的子类NettyBlockTransferService，NettyBlockTransferService将提供对外的块传输服务。
+     * 也正是因为MapOutputTracker与NettyBlockTransferService的配合，才实现了Spark的Shuffle。
+     */
     val blockTransferService =
       new NettyBlockTransferService(conf, securityManager, bindAddress, advertiseAddress,
         blockManagerPort, numUsableCores)
@@ -358,6 +381,9 @@ object SparkEnv extends Logging {
       // Don't start metrics system right now for Driver.
       // We need to wait for the task scheduler to give us an app ID.
       // Then we can start the metrics system.
+      /**
+       * 此时虽然创建了，但是并未启动，目的是等待SparkContext中的任务调度器TaskScheduler告诉度量系统应用程序ID后再启动。
+       */
       MetricsSystem.createMetricsSystem("driver", conf, securityManager)
     } else {
       // We need to set the executor ID before the MetricsSystem is created because sources and
